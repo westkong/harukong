@@ -25,7 +25,8 @@ export default function Home({ userId }) {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [streak, setStreak] = useState({ count: 0, lastDate: null });
-  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const albumInputRef = useRef(null);
 
   // 초기 로딩
   useEffect(() => {
@@ -334,14 +335,14 @@ export default function Home({ userId }) {
       )}
 
       <div
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => albumInputRef.current?.click()}
         style={{
           width: '100%', aspectRatio: '1 / 1',
           background: 'var(--color-bg)',
           border: '2px dashed var(--color-primary-light)',
           borderRadius: 16,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', marginBottom: 16, overflow: 'hidden',
+          cursor: 'pointer', marginBottom: 12, overflow: 'hidden',
         }}
       >
         {photoPreview ? (
@@ -349,9 +350,26 @@ export default function Home({ userId }) {
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--color-text)' }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>📷</div>
-            <div style={{ fontSize: 14 }}>사진 선택하기</div>
+            <div style={{ fontSize: 14 }}>사진을 추가해보세요</div>
           </div>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          className="btn-ghost"
+          onClick={() => cameraInputRef.current?.click()}
+          style={{ flex: 1 }}
+        >
+          📷 카메라로 찍기
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => albumInputRef.current?.click()}
+          style={{ flex: 1 }}
+        >
+          🖼️ 앨범에서 고르기
+        </button>
       </div>
 
       {isEditing && (
@@ -360,11 +378,19 @@ export default function Home({ userId }) {
         </p>
       )}
 
+      {/* 카메라: capture로 바로 촬영 / 앨범: capture 없이 사진첩 */}
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={albumInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleFileSelect}
         style={{ display: 'none' }}
       />

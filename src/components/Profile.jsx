@@ -178,10 +178,11 @@ export default function Profile({ userId, onThemeChange, currentTheme }) {
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   aspectRatio: '1 / 1',
+                  minWidth: 0,
                   transition: 'all 0.15s',
                 }}
               >
-                <img src={url} alt="" style={{ width: '100%', height: '100%' }} />
+                <img src={url} alt="" style={{ width: '100%', height: '100%', display: 'block' }} />
               </button>
             );
           })}
@@ -240,6 +241,7 @@ export default function Profile({ userId, onThemeChange, currentTheme }) {
                   background: t.bg,
                   cursor: 'pointer',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  minWidth: 0,
                   transition: 'all 0.15s',
                 }}
               >
