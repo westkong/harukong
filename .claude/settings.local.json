@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell($src = \"C:\\\\HaruKongTemp\"; $dst = \"C:\\\\HaruKong\"; Get-ChildItem -Path $src | ForEach-Object { Copy-Item -Path $_.FullName -Destination $dst -Recurse -Force }; Get-ChildItem C:\\\\HaruKong)"
+    ]
+  }
+}
