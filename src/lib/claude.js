@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export async function generateComment(base64Image, mediaType = 'image/jpeg') {
+export async function generateComment(base64Image, mediaType = 'image/jpeg', userText = '') {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -18,7 +18,7 @@ export async function generateComment(base64Image, mediaType = 'image/jpeg') {
       apikey: ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ base64Image, mediaType }),
+    body: JSON.stringify({ base64Image, mediaType, userText }),
   });
 
   const data = await res.json().catch(() => ({}));

@@ -110,11 +110,11 @@ export default function Home({ userId }) {
       reader.readAsDataURL(file);
     });
 
-  const fetchAiComment = async (file) => {
+  const fetchAiComment = async (file, userText = '') => {
     try {
       const base64 = await fileToBase64(file);
       const mediaType = file.type || 'image/jpeg';
-      return await generateComment(base64, mediaType);
+      return await generateComment(base64, mediaType, userText);
     } catch (err) {
       console.warn('콩이 한마디 생성 실패:', err);
       return null;
@@ -141,7 +141,7 @@ export default function Home({ userId }) {
     try {
       const [{ publicUrl }, aiComment] = await Promise.all([
         uploadPhoto(photoFile),
-        fetchAiComment(photoFile),
+        fetchAiComment(photoFile, text),
       ]);
 
       const { data: newPost, error } = await supabase
@@ -198,7 +198,7 @@ export default function Home({ userId }) {
       if (photoFile && photoPreview !== todayPost.photo_url) {
         const [{ publicUrl }, aiComment] = await Promise.all([
           uploadPhoto(photoFile),
-          fetchAiComment(photoFile),
+          fetchAiComment(photoFile, text),
         ]);
         newPhotoUrl = publicUrl;
         newAiComment = aiComment;
