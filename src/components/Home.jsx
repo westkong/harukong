@@ -128,16 +128,40 @@ export default function Home({ userId }) {
   const handleRegenComment = async () => {
     setRegenLoading(true);
     try {
-      // 1. 리워드 광고 시청 (토스 앱 밖 개발환경에서는 스킵)
+      // 1. 리워드 광고 시청
       let rewarded = false;
-      try {
-        const { showRewardedAd } = await import('@apps-in-toss/web-framework');
-        const result = await showRewardedAd({ unitId: AD_UNIT_ID });
-        rewarded = result?.rewarded ?? false;
-      } catch {
-        // 개발 환경(토스 앱 밖): 광고 SDK 없으면 바로 재생성
-        if (import.meta.env.DEV) rewarded = true;
+
+      if (import.meta.env.DEV) {
+        // 개발 환경(토스 앱 밖): 광고 없이 바로 재생성
+        rewarded = true;
+      } else {
+        // 토스 앱: loadFullScreenAd → loaded → showFullScreenAd → userEarnedReward
+        const { loadFullScreenAd, showFullScreenAd } = await import('@apps-in-toss/web-framework');
+
+        await new Promise((resolve, reject) => {
+          const cleanup = loadFullScreenAd({
+            options: { adGroupId: AD_UNIT_ID },
+            onEvent: (data) => { if (data.type === 'loaded') { cleanup?.(); resolve(); } },
+            onError: (err) => { cleanup?.(); reject(err); },
+          });
+        });
+
+        rewarded = await new Promise((resolve) => {
+          const cleanup = showFullScreenAd({
+            options: { adGroupId: AD_UNIT_ID },
+            onEvent: (data) => {
+              if (data.type === 'userEarnedReward') {
+                resolve(true);
+              } else if (data.type === 'dismissed' || data.type === 'failedToShow') {
+                cleanup?.();
+                resolve(false);
+              }
+            },
+            onError: () => { cleanup?.(); resolve(false); },
+          });
+        });
       }
+
       if (!rewarded) return;
 
       // 2. 기존 photo_url → base64 변환
