@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { generateComment } from '../lib/claude';
 import { useModal } from './ModalProvider';
 
+const AD_UNIT_ID = 'ait.v2.live.7117e966fcc94b35';
+
 // 사용자 로컬(한국 시간) 기준 'YYYY-MM-DD'
 // new Date().toISOString() 은 UTC라서 한국이랑 9시간 차이 → 사용 금지
 const getLocalDate = (d = new Date()) => {
@@ -25,7 +27,9 @@ export default function Home({ userId }) {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [streak, setStreak] = useState({ count: 0, lastDate: null });
-  const fileInputRef = useRef(null);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const cameraInputRef = useRef(null);
+  const albumInputRef = useRef(null);
 
   // 초기 로딩
   useEffect(() => {
@@ -109,14 +113,80 @@ export default function Home({ userId }) {
       reader.readAsDataURL(file);
     });
 
-  const fetchAiComment = async (file) => {
+  const fetchAiComment = async (file, userText = '') => {
     try {
       const base64 = await fileToBase64(file);
       const mediaType = file.type || 'image/jpeg';
-      return await generateComment(base64, mediaType);
+      return await generateComment(base64, mediaType, userText);
     } catch (err) {
       console.warn('콩이 한마디 생성 실패:', err);
       return null;
+    }
+  };
+
+  // 광고 보고 콩이 한마디 재생성
+  const handleRegenComment = async () => {
+    setRegenLoading(true);
+    try {
+      // 1. 리워드 광고 시청
+      let rewarded = false;
+
+      if (import.meta.env.DEV) {
+        // 개발 환경(토스 앱 밖): 광고 없이 바로 재생성
+        rewarded = true;
+      } else {
+        // 토스 앱: loadFullScreenAd → loaded → showFullScreenAd → userEarnedReward
+        const { loadFullScreenAd, showFullScreenAd } = await import('@apps-in-toss/web-framework');
+
+        await new Promise((resolve, reject) => {
+          const cleanup = loadFullScreenAd({
+            options: { adGroupId: AD_UNIT_ID },
+            onEvent: (data) => { if (data.type === 'loaded') { cleanup?.(); resolve(); } },
+            onError: (err) => { cleanup?.(); reject(err); },
+          });
+        });
+
+        rewarded = await new Promise((resolve) => {
+          const cleanup = showFullScreenAd({
+            options: { adGroupId: AD_UNIT_ID },
+            onEvent: (data) => {
+              if (data.type === 'userEarnedReward') {
+                resolve(true);
+              } else if (data.type === 'dismissed' || data.type === 'failedToShow') {
+                cleanup?.();
+                resolve(false);
+              }
+            },
+            onError: () => { cleanup?.(); resolve(false); },
+          });
+        });
+      }
+
+      if (!rewarded) return;
+
+      // 2. 기존 photo_url → base64 변환
+      const imgRes = await fetch(todayPost.photo_url);
+      const blob = await imgRes.blob();
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const mediaType = blob.type || 'image/jpeg';
+
+      // 3. 콩이 한마디 새로 생성
+      const newComment = await generateComment(base64, mediaType, todayPost.text ?? '');
+      if (!newComment) return;
+
+      // 4. DB 저장 + 화면 즉시 반영
+      await supabase.from('posts').update({ ai_comment: newComment }).eq('id', todayPost.id);
+      setTodayPost((prev) => ({ ...prev, ai_comment: newComment }));
+    } catch (err) {
+      console.error('콩이 재생성 실패:', err);
+      modal.alert('콩이 재생성에 실패했어요 😢');
+    } finally {
+      setRegenLoading(false);
     }
   };
 
@@ -140,7 +210,7 @@ export default function Home({ userId }) {
     try {
       const [{ publicUrl }, aiComment] = await Promise.all([
         uploadPhoto(photoFile),
-        fetchAiComment(photoFile),
+        fetchAiComment(photoFile, text),
       ]);
 
       const { data: newPost, error } = await supabase
@@ -197,7 +267,7 @@ export default function Home({ userId }) {
       if (photoFile && photoPreview !== todayPost.photo_url) {
         const [{ publicUrl }, aiComment] = await Promise.all([
           uploadPhoto(photoFile),
-          fetchAiComment(photoFile),
+          fetchAiComment(photoFile, text),
         ]);
         newPhotoUrl = publicUrl;
         newAiComment = aiComment;
@@ -286,20 +356,37 @@ export default function Home({ userId }) {
         </div>
 
         {todayPost.ai_comment && (
-          <div
-            style={{
-              marginTop: 12, padding: '12px 16px',
-              background: 'var(--color-bg)', borderRadius: 12,
-              display: 'flex', gap: 10, alignItems: 'flex-start',
-            }}
-          >
-            <span style={{ fontSize: 22, lineHeight: 1 }}>🫘</span>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text)', fontWeight: 600, marginBottom: 2 }}>
-                콩이 한마디
+          <div style={{ marginTop: 12 }}>
+            <div
+              style={{
+                padding: '12px 16px',
+                background: 'var(--color-bg)', borderRadius: 12,
+                display: 'flex', gap: 10, alignItems: 'flex-start',
+              }}
+            >
+              <span style={{ fontSize: 22, lineHeight: 1 }}>🫘</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text)', fontWeight: 600, marginBottom: 2 }}>
+                  콩이 한마디
+                </div>
+                <p style={{ fontSize: 14, lineHeight: 1.5, color: '#444' }}>{todayPost.ai_comment}</p>
               </div>
-              <p style={{ fontSize: 14, lineHeight: 1.5, color: '#444' }}>{todayPost.ai_comment}</p>
             </div>
+            <button
+              onClick={handleRegenComment}
+              disabled={regenLoading}
+              style={{
+                marginTop: 8, width: '100%',
+                padding: '9px 0', borderRadius: 10,
+                background: regenLoading ? '#f0f0f0' : '#fafafa',
+                border: '1px solid #eee',
+                cursor: regenLoading ? 'default' : 'pointer',
+                fontSize: 13, color: '#888',
+                transition: 'all 0.15s',
+              }}
+            >
+              {regenLoading ? '콩이 생각 중...' : '🎲 다른 한마디 듣기 (광고 1번)'}
+            </button>
           </div>
         )}
 
@@ -334,14 +421,14 @@ export default function Home({ userId }) {
       )}
 
       <div
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => albumInputRef.current?.click()}
         style={{
           width: '100%', aspectRatio: '1 / 1',
           background: 'var(--color-bg)',
           border: '2px dashed var(--color-primary-light)',
           borderRadius: 16,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', marginBottom: 16, overflow: 'hidden',
+          cursor: 'pointer', marginBottom: 12, overflow: 'hidden',
         }}
       >
         {photoPreview ? (
@@ -349,9 +436,26 @@ export default function Home({ userId }) {
         ) : (
           <div style={{ textAlign: 'center', color: 'var(--color-text)' }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>📷</div>
-            <div style={{ fontSize: 14 }}>사진 선택하기</div>
+            <div style={{ fontSize: 14 }}>사진을 추가해보세요</div>
           </div>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          className="btn-ghost"
+          onClick={() => cameraInputRef.current?.click()}
+          style={{ flex: 1 }}
+        >
+          📷 카메라로 찍기
+        </button>
+        <button
+          className="btn-ghost"
+          onClick={() => albumInputRef.current?.click()}
+          style={{ flex: 1 }}
+        >
+          🖼️ 앨범에서 고르기
+        </button>
       </div>
 
       {isEditing && (
@@ -360,11 +464,19 @@ export default function Home({ userId }) {
         </p>
       )}
 
+      {/* 카메라: capture로 바로 촬영 / 앨범: capture 없이 사진첩 */}
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={albumInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleFileSelect}
         style={{ display: 'none' }}
       />

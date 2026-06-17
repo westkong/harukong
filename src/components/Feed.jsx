@@ -3,20 +3,12 @@ import { supabase } from '../lib/supabase';
 
 const EMOJIS = ['🥹', '👍', '🔥', '🫶'];
 
-// 한국 시간 기준 'YYYY-MM-DD' (UTC 차이 방지)
-const getLocalDate = (d = new Date()) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
 export default function Feed({ userId }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadFeed = async () => {
-    const today = getLocalDate();
+    // 같은 그룹원의 모든 게시물을 최신순으로 (RLS가 그룹원만 노출)
     const { data, error } = await supabase
       .from('posts')
       .select(`
@@ -25,8 +17,8 @@ export default function Feed({ userId }) {
         post_groups!inner(groups(id, name)),
         reactions(id, emoji, user_id)
       `)
-      .eq('posted_date', today)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(200);
     if (error) console.error(error);
     setPosts(data ?? []);
     setLoading(false);

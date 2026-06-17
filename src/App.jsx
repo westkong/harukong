@@ -84,6 +84,8 @@ export default function App() {
                 : <Navigate to="/login" replace />
             }
           />
+          {/* 토스 딥링크(intoss://harukong/...) 등 미정의 경로 → 홈으로 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         {session && <BottomNav onThemeChange={setTheme} currentTheme={theme} userId={session.user.id} />}
       </BrowserRouter>
