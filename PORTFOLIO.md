@@ -203,6 +203,14 @@
 - **결과:** 같은 입력 → "비 오는 날엔 이 친구 옆이 최고지 🐶 같이 뒹굴며 푹 쉬어". 정서 일치 + 사진 짚기 + 응원 마무리 + 어미 완결
 - **배운 것:** 멀티모달 앱은 "보이는 것"만 모델에 주면 사용자 의도를 절반밖에 못 잡음. 사용자가 직접 적은 텍스트는 가장 강한 의도 신호 — 무조건 같이 보내야 함
 
+### 5.10 광고 API 함수명 오추정 — 버튼 눌려도 아무 반응 없음
+- **증상:** "🎲 다른 한마디 듣기" 버튼이 화면에 보이지만 눌러도 아무것도 안 됨
+- **원인:** `showRewardedAd`라는 함수가 `@apps-in-toss/web-framework`에 없음. 사용 가능한 함수를 추정해 코딩 → import 성공처럼 보이지만 undefined 호출 → catch 진입 → DEV 환경도 아니라 `rewarded=false` 유지 → 조용히 리턴. 에러 메시지도 표면에 안 뜸
+- **발견 방법:** 실제 패키지 exports 목록 확인 (`node -e "console.log(Object.keys(require(...)))"`)
+- **실제 API:** `loadFullScreenAd(options, onEvent, onError)` → `'loaded'` 이벤트 → `showFullScreenAd(options, onEvent, onError)` → `'userEarnedReward'` 이벤트. 두 함수 모두 콜백 기반이며 cleanup 함수를 리턴
+- **해결:** Promise로 콜백을 감싸 async/await 구조로 직렬 처리. DEV 환경에선 광고 없이 바로 재생성
+- **배운 것:** SDK 함수는 문서가 없으면 반드시 실제 exports·타입 정의 확인 후 코딩. "조용한 실패(silent failure)"는 분기 끝에 아무 효과 없이 return되는 구조에서 자주 발생 — 에러가 안 터지는 게 더 찾기 어렵다
+
 ---
 
 ## 6. 운영 메트릭 (출시 후 채울 것)
@@ -292,6 +300,7 @@
 - **2026-05-19** Claude 호출 **Edge Function 프록시 전환** (`claude-proxy`) — API 키 서버 secret 이동 + Supabase JWT 검증 + 시스템 프롬프트 서버화. `generateComment` 시그니처 유지로 호출부 무수정. v1.1 .ait 빌드
 - **2026-05-19** 피드 — `posted_date=오늘` 필터 제거 → 같은 그룹의 과거 게시물도 최신 200개까지 보존
 - **2026-05-19** 모델 재상향 Haiku 4.5 → **Sonnet 4.5** + 사용자 글까지 함께 입력(`userText`) + 프롬프트 규칙 강화("글 정서 우선 + 어미 완결"). 어색했던 톤·끊긴 문장 해결. v1.2 .ait 빌드
+- **2026-05-28** 리워드 광고 통합 — `ait.v2.live.7117e966fcc94b35` 등록, "🎲 다른 한마디 듣기" 버튼 추가. `loadFullScreenAd→showFullScreenAd` 콜백 구조. v1.3 빌드 후 광고 API 오류(존재하지 않는 `showRewardedAd` 호출) 발견 → 실제 패키지 타입 확인 후 즉시 수정. v1.4 빌드
 
 ### v1.1 (출시) — Claude 프록시 + 피드 보존
 - API 키 클라이언트 노출 완전 차단 (Edge Function 프록시 + JWT 검증)
@@ -301,7 +310,17 @@
 - 콩이가 사용자 글의 정서까지 함께 받아 한마디 (글 가라앉으면 같이 가라앉고, 신나면 같이 신남)
 - 모델 Sonnet 4.5로 상향, 응답 문장 자연스러움 ↑
 
-### v1.3 (계획)
+### v1.3 (출시) — 리워드 광고 연동
+- "🎲 다른 한마디 듣기 (광고 1번)" 버튼 추가 — 콩이 코멘트 재생성
+- `loadFullScreenAd` → `showFullScreenAd` 콜백 구조 + `userEarnedReward` 이벤트 대기
+- 광고 단위: `ait.v2.live.7117e966fcc94b35` (리워드 / Google AdMob 미디에이션)
+
+### v1.4 (출시) — 광고 API 버그 수정
+- v1.3에서 `showRewardedAd`라는 존재하지 않는 함수를 호출 → 버튼 눌려도 아무 반응 없음
+- 실제 API 확인 후 `loadFullScreenAd → showFullScreenAd` 콜백 구조로 교체
+- `userEarnedReward` 이벤트 수신 시에만 콩이 재생성 트리거
+
+### v1.5 (계획)
 - 사진 자동 압축 (Storage 1GB 무료 한도 효율적 사용)
 - 사용자 피드백 기반 우선순위 선정
 
